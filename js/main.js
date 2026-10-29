@@ -1,5 +1,5 @@
 /* =========================================================
-   Dropi Acceleration · motor de escenas a pantalla completa
+   Dropi · Lab Summit · motor de escenas a pantalla completa
    Cada gesto (rueda, swipe, teclado, flechas del riel) avanza un paso:
    primero los pasos internos de la escena (data-beats) y luego la
    escena siguiente. data-curtain="Texto" abre la escena con la
@@ -21,6 +21,14 @@
     ai: {
       words: ['ECOSISTEMA', 'DROPI'],          // palabras que forma el campo ASCII (se alternan)
       ais: ['CLAUDE', 'DEEPSEEK', 'GEMINI']    // nombres que aparecen de fondo
+    },
+    hundred: {
+      lines: ['DROPI = 100 MILLONES', 'DE ÓRDENES'],                 // titular de la intro, una línea por elemento
+      linesMobile: ['DROPI =', '100', 'MILLONES', 'DE ÓRDENES'],    // en pantallas angostas
+      waveSpeed: 2.2                                                // velocidad de las ondas
+    },
+    chatea: {
+      intervalMs: 2000     // cada cuánto cambia la captura de Chatea Pro
     }
   };
 
@@ -110,74 +118,6 @@
   }
 
   /* ---------------------------------------------------------
-     Moneda 3D: capas apiladas en Z (canto) + caras con símbolo
-     --------------------------------------------------------- */
-  function coinStack(box, o = {}) {
-    if (!box) return;
-    const T = o.T || 20, N = o.N || 10, g = o.glyph || '€';
-    for (let i = 0; i < N; i++) {
-      const l = document.createElement('i'); l.className = 'cl cl--side';
-      l.style.transform = `translateZ(${(-T / 2 + (T * i) / (N - 1)).toFixed(2)}px)`; box.appendChild(l);
-    }
-    const front = document.createElement('i'); front.className = 'cl cl--face'; front.innerHTML = `<span>${g}</span>`;
-    front.style.transform = `translateZ(${T / 2 + .5}px)`;
-    const back = document.createElement('i'); back.className = 'cl cl--face cl--back'; back.innerHTML = `<span>${g}</span>`;
-    back.style.transform = `translateZ(${-T / 2 - .5}px) rotateY(180deg)`;
-    box.append(front, back);
-  }
-
-
-
-  /* ---------------------------------------------------------
-     ASCII wave de fondo: ondas concéntricas de caracteres que
-     salen de un origen; el cursor las agita
-     --------------------------------------------------------- */
-  function AsciiWave(cv, o = {}) {
-    const ctx = cv.getContext('2d');
-    const RAMP = '.:-=+*x%#@', COL = ['rgba(255,255,255,.2)', '#7a3e0c', '#ff8405', '#ffc48a'];
-    let W = 0, H = 0, cw = 9, chh = 14, cols = 0, rows = 0, dpr = 1, atlas = null, aw = 0, ah = 0, rnd = null;
-    function build() {
-      W = cv.clientWidth; H = cv.clientHeight; if (!W || !H) return;
-      cw = W < 861 ? 7 : 9; chh = Math.round(cw * 1.55);
-      cols = Math.ceil(W / cw); rows = Math.ceil(H / chh);
-      dpr = Math.min(2, devicePixelRatio || 1);
-      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-      aw = Math.ceil(cw * dpr); ah = Math.ceil(chh * dpr);
-      atlas = document.createElement('canvas'); atlas.width = aw * RAMP.length; atlas.height = ah * COL.length;
-      const a = atlas.getContext('2d');
-      a.font = `600 ${(chh * .85 * dpr).toFixed(1)}px ui-monospace, Menlo, Consolas, "Courier New", monospace`; a.textAlign = 'center'; a.textBaseline = 'middle';
-      COL.forEach((c, y) => { a.fillStyle = c; [...RAMP].forEach((ch, x) => a.fillText(ch, x * aw + aw / 2, y * ah + ah / 2 + dpr)); });
-      rnd = new Float32Array(cols * rows); for (let i = 0; i < rnd.length; i++) rnd[i] = Math.random();
-    }
-    function draw(t, alpha = 1) {
-      if (!W) build(); if (!W) return;
-      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
-      if (alpha < .01) return;
-      ctx.globalAlpha = alpha;
-      const ox = W * (o.x ?? .5), oy = H * (o.y ?? .5), maxD = Math.hypot(Math.max(ox, W - ox), Math.max(oy, H - oy));
-      const r = cv.getBoundingClientRect(), mxp = hasMouse ? px - r.left : -9999, myp = hasMouse ? py - r.top : -9999;
-      const sp = RM ? 0 : 1;
-      for (let j = 0; j < rows; j++) {
-        const y = (j + .5) * chh, dy = y - oy;
-        for (let i = 0; i < cols; i++) {
-          const x = (i + .5) * cw, dx = x - ox, d = Math.sqrt(dx * dx + dy * dy), ang = Math.atan2(dy, dx);
-          const ring = .5 + .5 * Math.sin(d * .03 - t * 1.6 * sp);
-          const arcs = .5 + .5 * Math.cos(3 * ang + t * .35 * sp + d * .004);
-          const swell = .5 + .5 * Math.sin(x * .006 + y * .004 + t * .5 * sp);
-          let dn = (.05 + .62 * ring * ring * (.3 + .7 * arcs)) * (.55 + .45 * swell) * (1 - .55 * d / maxD);
-          if (mxp > -999) { const md = Math.hypot(x - mxp, y - myp); if (md < 150) dn += Math.pow(1 - md / 150, 2) * .5; }
-          dn += (rnd[j * cols + i] - .5) * .06;
-          if (dn < .1) continue;
-          const ci = Math.min(9, Math.floor(dn * 10)), col = dn < .32 ? 0 : dn < .5 ? 1 : dn < .7 ? 2 : 3;
-          ctx.drawImage(atlas, ci * aw, col * ah, aw, ah, Math.round(i * cw * dpr), Math.round(j * chh * dpr), aw, ah);
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
-    return { build, draw };
-  }
-
-  /* ---------------------------------------------------------
      Iconos lineales en 3D: la misma línea repetida en capas Z
      (extrusión de neón); la capa frontal brilla
      --------------------------------------------------------- */
@@ -207,9 +147,6 @@
     return obj;
   }
 
-  /* Logo Dropi (isotipo) en línea, para la caja de importación */
-  const DROPI_LOGO = `<svg class="box-logo" viewBox="0 0 1050.34 1048.79" aria-hidden="true"><path d="M311.41,254.79c.45.3,0,0-.55-.35-47.93-27.33-95.86-54.66-143.69-82.09-2.61-1.51-4.07-1.16-5.88.85-15.78,17.18-32.1,33.86-47.18,51.55-10.95,12.86-20.25,27.13-30.45,40.69-.95,1.31-2.81,1.91-4.27,2.86-1-1.61-2.31-3.06-2.96-4.82-.5-1.41-.25-3.06-.25-4.62-.2-24.72-.15-49.49-.7-74.21-.15-6.38,1.76-10.55,6.73-14.62,18.44-15.07,22.91-38.69,11.91-59.69-9.85-18.74-31.2-29.29-50.69-25.07-20.4,4.42-35.97,21.25-39.34,42.45-3.01,19.14,6.53,37.83,24.92,48.18,4.02,2.26,5.68,4.82,5.63,9.55-.15,58.63-.1,117.26-.15,175.89,0,2.56-.5,5.28-1.46,7.64-15.52,38.23-25.37,77.87-30.14,118.82-6.08,52.6-2.31,104.6,9.09,156.15,18.99,86.01,60.04,160.12,120.88,223.32,53.96,56.07,117.71,97.67,190.31,125.65,39.74,15.32,80.79,25.67,123.09,30.75,15.12,1.81,30.35,3.32,45.47-.25,56.62-13.31,102.34-43.71,139.02-88.32.55-.65.85-1.51,1.51-2.61-1.21-.1-1.96-.25-2.71-.25-17.38-.6-34.82-1.21-52.2-1.81-1.71-.05-3.47-.05-5.07-.55-2.86-.85-3.82-2.71-1.71-5.17,1.51-1.76,3.32-3.27,5.17-4.72,38.69-30.09,76.47-61.19,110.28-96.91,9.24-9.75,9.14-9.5,18.29.5,24.47,26.68,49.14,53.26,73.75,79.78,4.42,4.77,3.92,7.99-2.41,10.25-14.17,5.07-28.34,10.35-42.7,14.77-6.63,2.06-10.5,5.88-13.82,11.81-11.66,20.9-23.81,41.5-35.82,62.2-1.36,2.36-2.91,4.62-5.02,7.89,4.17-1.26,7.23-2.26,10.3-3.11,72.65-20.65,138.11-54.76,195.03-104.8,70.04-61.54,119.42-136.5,146.15-225.93,21.25-71.09,25.72-143.64,14.92-216.94-10.55-71.59-36.27-137.76-76.06-198.15-44.11-67.02-100.98-121.03-169.71-162.53-57.63-34.82-119.57-57.63-186.04-68.38-50.99-8.24-101.99-9.8-153.23-2.71-51.9,7.18-101.79,21.2-149.42,43.11-9.34,4.32-18.49,8.99-28.34,13.82,3.37,1.86,5.83,3.11,8.19,4.57,44.76,26.58,89.53,53.15,134.19,79.83,2.66,1.56,4.77,1.81,7.69.6,53-22.66,108.87-32.36,166.05-34.87,48.13-2.16,95.56,2.96,142.23,15.37,48.58,12.91,92.14,35.02,129.92,68.38,35.52,31.35,62.5,68.98,82.8,111.53,20,41.9,31.7,86.21,37.23,132.13,6.33,52.6,5.02,104.9-8.74,156.4-19.34,72.35-63,123.59-132.84,151.73-41.8,16.83-85.76,23.86-130.48,26.63-36.68,2.31-73.3,2.11-109.98-.6-42.25-3.11-83.4-11.15-123.54-24.67-46.72-15.73-89.53-38.53-126.91-71.04-6.53-5.68-12.71-11.71-19.29-17.84-.75,1.26-1.36,2.31-1.96,3.37-12.66,22.36-27.88,42.75-48.08,58.93-43.76,35.02-92.44,44.46-143.99,21.35-44.31-19.85-73.25-55.47-89.93-100.98-.8-2.26-1.21-4.67-1.81-6.98,1.96,1.26,3.06,2.86,4.07,4.52,14.37,23.06,32.15,42.81,56.17,56.07,49.94,27.53,98.92,24.92,146.2-6.28,32.51-21.45,52.8-52.65,66.47-88.37,13.97-36.47,17.94-74.46,14.87-113.24-2.61-33.36-12.06-64.61-29.29-93.4-13.51-22.56-31.2-41.4-51.95-57.43-2.06-1.61-4.32-2.91-3.06-6.38,6.98-19.29,14.12-38.58,25.17-55.97,9.39-14.77,19.9-28.84,29.94-43.31l.2.1ZM589.44,505.74c-.45-5.12-.7-11.81-1.61-18.44-2.51-17.79-7.94-34.47-19.54-48.63-14.17-17.23-34.62-23.31-53.31-15.52-13.82,5.78-23.16,16.28-29.99,29.34-12.76,24.37-15.12,50.29-11.25,77.02,2.41,16.68,8.14,32.2,18.84,45.52,8.09,10.05,17.94,17.68,31.15,19.64,17.28,2.56,31.1-4.37,42.2-16.93,17.74-20.1,22.81-44.61,23.56-72.05l-.05.05ZM910.78,501.37c-.1-8.49-1.61-23.16-6.53-37.23-4.17-12.01-9.45-23.36-19.59-31.7-11.35-9.29-25.32-9.7-36.07.15-5.73,5.28-11.25,11.56-14.52,18.54-17.13,36.37-17.84,73.45-2.26,110.58,3.57,8.49,9.04,15.98,16.68,21.55,10.4,7.59,20.75,8.04,31.7,1.21,7.74-4.82,13.16-11.76,17.48-19.64,9.7-17.79,13.21-37.03,13.11-63.4v-.05ZM303.12,366.67c.4,0,.85.1,1.26.15,7.39-10.55,14.42-21.4,22.26-31.55,27.18-35.22,59.84-63.91,100.78-82.34,31.75-14.32,65.26-21.9,99.53-26.68,18.29-2.56,22.71-8.44,21.1-26.83-.75-8.59-5.17-14.12-13.11-16.08-5.78-1.41-12.01-1.76-17.99-1.46-18.44.9-36.32,4.82-53.71,10.9-78.22,27.28-129.52,81.24-156.7,158.91-1.71,4.82-2.36,10-3.47,15.02l.05-.05ZM198.47,139.34c2.56,1.51,4.42,2.61,6.23,3.67,45.32,26.48,90.63,52.95,135.9,79.58,2.61,1.56,3.87.4,5.63-.9,9.75-7.49,19.49-14.92,29.29-22.31,1.56-1.16,3.22-2.16,5.12-3.47-48.13-28.39-95.76-56.42-143.79-84.76-12.61,9.29-25.17,18.54-38.33,28.24l-.05-.05Z"/><path d="M290.21,521.37c-.65,39.99-10.55,78.38-35.17,112.09-14.92,20.45-33.56,36.47-58.43,43.26-35.62,9.7-67.57,1.06-95.16-22.66-30.09-25.82-46.37-59.43-52-98.32-5.38-36.93-2.56-73.2,11.15-108.17,10.05-25.67,25.12-47.68,47.38-64.51,42.3-31.95,88.67-26.23,125.2,2.06,25.32,19.59,39.74,46.42,48.63,76.57,5.63,19.04,8.14,38.58,8.39,59.69h0Z"/></svg>`;
-
   /* ---------------------------------------------------------
      Banderas en versión lineal: contorno y franjas en sus colores
      Coordenadas u, v de 0 a 1 sobre la bandera
@@ -227,6 +164,166 @@
      p = progreso de los pasos (0..1) · e = entrada (0..1)
      --------------------------------------------------------- */
   const controllers = {
+
+    /* =========================================================
+       INTRO · DROPI = 100 MILLONES DE ÓRDENES
+       El titular se arma con caracteres ASCII; ondas concéntricas
+       recorren las letras y un campo de wave dots late detrás.
+       El cursor ilumina letras y agranda los puntos.
+       ========================================================= */
+    hundred(el) {
+      const cv = $('.hundred-field', el), ctx = cv.getContext('2d'), hint = $('.scroll-hint', el);
+      const C = CONFIG.hundred, RAMP = '.:-=+*x%#@', SCR = '@#%x*+';
+      const COL = ['rgba(255,255,255,.22)', '#9a4e10', '#ff8405', '#ffc48a', '#fff4e8'];
+      let W = 0, H = 0, cw = 8, chh = 12, cols = 0, rows = 0, dpr = 1, atlas = null, aw = 0, ah = 0;
+      let rnd = null, mask = null, dots = [], ready = false, ccx = 0, ccy = 0, maxD = 1;
+
+      /* Máscara del titular a la resolución de la cuadrícula ASCII.
+         Tusker no trae "=", así que se dibuja con dos barras del grosor del trazo. */
+      function makeMask(lines) {
+        const m = new Float32Array(cols * rows);
+        const c = document.createElement('canvas'); c.width = cols; c.height = rows;
+        const g = c.getContext('2d'), fam = `"Tusker Grotesk", "Anton", "Arial Narrow", sans-serif`;
+        const mob = W < 861;
+        g.font = `400 100px ${fam}`;
+        const cap = g.measureText('M').actualBoundingBoxAscent || 72;
+        const parts = t => t.split(/(=)/).filter(Boolean);
+        const eqW = cap * .66;
+        const widthOf = t => parts(t).reduce((w, q) => w + (q === '=' ? eqW : g.measureText(q).width), 0);
+        const w100 = lines.map(widthOf), maxW = Math.max(...w100), pitch = 1.38, n = lines.length;
+        const blockH = cap * (1 + pitch * (n - 1));
+        const k = Math.min(W * (mob ? .9 : .84) / maxW, H * (mob ? .58 : .74) / blockH);
+        const fs = 100 * k, capK = cap * k;
+        g.setTransform(1 / cw, 0, 0, 1 / chh, 0, 0);
+        g.font = `400 ${fs}px ${fam}`; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+        g.fillStyle = g.strokeStyle = '#fff'; g.lineWidth = fs * .018; g.lineJoin = 'round';
+        const top = H * .47 - capK * (1 + pitch * (n - 1)) / 2;
+        lines.forEach((t, li) => {
+          let x = W / 2 - w100[li] * k / 2;
+          const base = top + capK + li * capK * pitch;
+          parts(t).forEach(q => {
+            if (q === '=') {
+              const bw = eqW * k * .7, bx = x + eqW * k * .15, bh = capK * .12, gap = capK * .17, mid = base - capK * .5;
+              g.fillRect(bx, mid - gap / 2 - bh, bw, bh);
+              g.fillRect(bx, mid + gap / 2, bw, bh);
+              x += eqW * k;
+            } else {
+              g.fillText(q, x, base); g.strokeText(q, x, base);
+              x += g.measureText(q).width;
+            }
+          });
+        });
+        const d = g.getImageData(0, 0, cols, rows).data;
+        for (let i = 0; i < m.length; i++) m[i] = d[i * 4 + 3] / 255;
+        return m;
+      }
+      function build() {
+        W = cv.clientWidth; H = cv.clientHeight; if (!W || !H) return;
+        const mob = W < 861;
+        cw = mob ? 4 : 7; chh = Math.round(cw * 1.5);
+        cols = Math.ceil(W / cw); rows = Math.ceil(H / chh);
+        dpr = Math.min(2, devicePixelRatio || 1);
+        cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+        aw = Math.ceil(cw * dpr); ah = Math.ceil(chh * dpr);
+        atlas = document.createElement('canvas'); atlas.width = aw * RAMP.length; atlas.height = ah * COL.length;
+        const a = atlas.getContext('2d');
+        a.font = `700 ${(chh * .92 * dpr).toFixed(1)}px ui-monospace, Menlo, Consolas, "Courier New", monospace`; a.textAlign = 'center'; a.textBaseline = 'middle';
+        COL.forEach((col, y) => { a.fillStyle = col; [...RAMP].forEach((chr, x) => a.fillText(chr, x * aw + aw / 2, y * ah + ah / 2 + dpr)); });
+        rnd = new Float32Array(cols * rows); for (let i = 0; i < rnd.length; i++) rnd[i] = Math.random();
+        mask = makeMask(mob ? C.linesMobile : C.lines);
+        ccx = W / 2; ccy = H * .47; maxD = Math.hypot(W / 2, H * .53);
+        /* wave dots: rejilla regular fuera de las letras */
+        const gs = mob ? 13 : 17; dots = [];
+        for (let y = gs / 2; y < H; y += gs) for (let x = gs / 2; x < W; x += gs) {
+          const i = Math.min(cols - 1, Math.floor(x / cw)), j = Math.min(rows - 1, Math.floor(y / chh));
+          let near = 0;
+          for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const ii = i + di, jj = j + dj; if (ii >= 0 && jj >= 0 && ii < cols && jj < rows) near = Math.max(near, mask[jj * cols + ii]); }
+          if (near > .05) continue;
+          dots.push({ x, y, d: Math.hypot(x - ccx, y - ccy) });
+        }
+        ready = true;
+      }
+      if (document.fonts) document.fonts.load('400 100px "Tusker Grotesk"').then(() => { if (W) build(); }).catch(() => {});
+
+      return {
+        live: true, build,
+        update(p, e, dt) {
+          if (!ready) build(); if (!ready) return;
+          const t = RM ? 0 : time * C.waveSpeed, ent = eo(e), F = RM ? 2 : e * 1.25, tk = Math.floor(time * 9);
+          const r0 = cv.getBoundingClientRect(), mxp = hasMouse ? px - r0.left : -9999, myp = hasMouse ? py - r0.top : -9999;
+          ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+
+          /* ---- wave dots de fondo (por lotes de opacidad, como en el globo) ---- */
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          const B = 6, paths = Array.from({ length: B }, () => new Path2D()), Rmax = (W < 861 ? 13 : 17) * .2;
+          const reach = maxD * lerp(.15, 1.05, ent);
+          for (const q of dots) {
+            if (q.d > reach) continue;
+            const w = .5 + .5 * Math.sin(q.d * .028 - t), fall = 1 - q.d / maxD;
+            let v = w * w * (.25 + .75 * fall);
+            if (mxp > -999) { const md = Math.hypot(q.x - mxp, q.y - myp); if (md < 160) v += Math.pow(1 - md / 160, 2) * .9; }
+            const r = Math.max(.5, Rmax * (.3 + .9 * Math.min(1, v)));
+            const b = Math.min(B - 1, Math.floor(Math.min(.999, v) * B));
+            paths[b].moveTo(q.x + r, q.y); paths[b].arc(q.x, q.y, r, 0, 6.2832);
+          }
+          paths.forEach((pth, b) => {
+            const l = (b + .5) / B, a = (.08 + .62 * l) * ent;
+            ctx.fillStyle = `rgba(255,${Math.round(150 + 70 * l)},${Math.round(60 + 90 * l)},${a.toFixed(3)})`;
+            ctx.fill(pth);
+          });
+
+          /* ---- titular ASCII ---- */
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          for (let j = 0; j < rows; j++) {
+            const y = (j + .5) * chh, dy = y - ccy;
+            for (let i = 0; i < cols; i++) {
+              const idx = j * cols + i, m = mask[idx];
+              if (m < .12) continue;
+              const r = rnd[idx], th = .08 + .8 * (i / cols * .6 + r * .4);
+              if (F < th) continue;
+              let ch, col;
+              if (F - th < .07) { ch = RAMP.indexOf(SCR[(r * 6 + tk) % 6 | 0]); col = 3; }
+              else {
+                const x = (i + .5) * cw, dx = x - ccx, d = Math.sqrt(dx * dx + dy * dy);
+                const w = .5 + .5 * Math.sin(d * .028 - t);
+                let v = .3 + .7 * w;
+                if (mxp > -999) { const md = Math.hypot(x - mxp, y - myp); if (md < 130) v += Math.pow(1 - md / 130, 2) * .6; }
+                v += (r - .5) * .14;
+                if (m < .45) { ch = 4; col = v > .6 ? 3 : 2; }           // borde de la letra: trazo más fino
+                else { ch = Math.max(5, Math.min(9, 5 + Math.floor(v * 5))); col = v > .94 ? 4 : v > .68 ? 3 : 2; }
+              }
+              ctx.drawImage(atlas, ch * aw, col * ah, aw, ah, Math.round(i * cw * dpr), Math.round(j * chh * dpr), aw, ah);
+            }
+          }
+          if (hint) op(hint, seg(e, .7, 1));
+        }
+      };
+    },
+
+    /* =========================================================
+       CHATEA PRO · capturas que rotan cada CONFIG.chatea.intervalMs
+       ========================================================= */
+    chatea(el) {
+      const slides = $$('.ch-slides img', el), frame = $('.ch-frame', el), dotsEl = $('.ch-dots', el);
+      dotsEl.innerHTML = slides.map(() => '<i><b></b></i>').join('');
+      const dots = $$('.ch-dots i', el), bars = dots.map(d => $('b', d));
+      let k = 0, acc = 0;
+      const set = n => { k = n; acc = 0; slides.forEach((s, i) => s.classList.toggle('is-on', i === n)); dots.forEach((d, i) => d.classList.toggle('is-on', i === n)); bars.forEach(b => { b.style.transform = 'scaleX(0)'; }); };
+      set(0);
+      return {
+        live: true,
+        enter() { set(0); },
+        update(p, e, dt) {
+          const ms = CONFIG.chatea.intervalMs;
+          if (e > .55 && slides.length > 1) {
+            acc += dt * 1000;
+            if (acc >= ms) set((k + 1) % slides.length);
+            bars[k].style.transform = `scaleX(${clamp(acc / ms).toFixed(4)})`;
+          }
+          frame.style.transform = `rotateY(${(-9 + mx * 7).toFixed(2)}deg) rotateX(${(4 - my * 5).toFixed(2)}deg)`;
+        }
+      };
+    },
 
     /* =========================================================
        MOMENTO 1 · Globo 3D en tres pasos
@@ -757,189 +854,8 @@
       };
     },
 
-    /* =========================================================
-       MOMENTO 2 · Dropi Acceleration (titular con partículas)
-       ========================================================= */
-    accel(el) {
-      const AG = Antigravity($('.accel-ag', el)), sub = $('.accel-sub', el);
-      const chars = [];
-      $$('.accel-l', el).forEach(l => {
-        const txt = l.textContent; l.textContent = ''; l.setAttribute('aria-label', txt);
-        [...txt].forEach(chr => { const s = document.createElement('span'); s.className = 'cc'; s.textContent = chr === ' ' ? '\u00a0' : chr; s.setAttribute('aria-hidden', 'true'); l.appendChild(s); chars.push(s); });
-      });
-      return {
-        live: true, build: () => AG.build(),
-        update(p, e, dt) {
-          AG.step(dt);
-          chars.forEach((c, i) => {
-            const k = eo(seg(e, .08 + i * .025, .5 + i * .025));
-            c.style.opacity = k; c.style.transform = `translateY(${((1 - k) * 35).toFixed(1)}%)`;
-            c.style.filter = k < .99 ? `blur(${((1 - k) * 10).toFixed(1)}px)` : '';
-          });
-          op(sub, seg(e, .55, 1), `translateY(${((1 - seg(e, .55, 1)) * 14).toFixed(1)}px)`);
-        }
-      };
-    },
-
-    /* ===== 2 · Moneda que se parte en dos mitades ===== */
-    coin(el) {
-      const coin = $('.coin', el), halves = $$('.coin-half', el), lbls = $$('.coin-lbl', el);
-      const bar = $('.example-bar i', el), count = $('.example .count', el), scene = $('.coin-scene', el);
-      const T = 26, N = 9;
-      const face = `<circle cx="100" cy="100" r="92"/><circle cx="100" cy="100" r="76" class="thin"/>
-        <path class="thin" d="M100 8v184"/>
-        <path d="M128 66c-6-8-15-12-25-12-21 0-35 17-35 46s14 46 35 46c10 0 19-4 25-12M56 88h50M56 112h50"/>`;
-      halves.forEach((h, side) => {
-        for (let i = 0; i < N; i++) {
-          const z = -T / 2 + (T * i) / (N - 1), edge = i === N - 1;
-          const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          sv.setAttribute('viewBox', '0 0 200 200'); sv.innerHTML = face;
-          sv.setAttribute('class', 'coin-line' + (edge ? ' is-face' : ''));
-          sv.style.setProperty('--d', (1 - Math.abs(z) / (T / 2)).toFixed(3));
-          const back = i === 0;
-          sv.style.transform = `translateZ(${z.toFixed(2)}px)${back ? ' rotateY(180deg)' : ''}`;
-          sv.style.clipPath = (side === 0) !== back ? 'inset(-4% 50% -4% -4%)' : 'inset(-4% -4% -4% 50%)';
-          h.appendChild(sv);
-        }
-      });
-      let ang = 0;
-      return {
-        live: true,
-        update(p, e, dt) {
-          const split = eio(seg(p, .08, .9)), ent = eo(e);
-          const speed = RM ? 0 : lerp(46, 0, split);
-          ang += speed * dt;
-          if (split > .02) { const target = Math.round(ang / 360) * 360 + (RM ? 0 : Math.sin(time * .9) * 12); ang += (target - ang) * Math.min(1, dt * 2.6 * split); }
-          coin.style.transform = `scale(${lerp(.6, 1, ent).toFixed(3)}) rotateX(${(14 - my * 8).toFixed(2)}deg) rotateY(${(ang + mx * 12).toFixed(2)}deg)`;
-          const w = scene.clientWidth;
-          halves[0].style.transform = `translateX(${(-split * w * .2).toFixed(1)}px) translateY(${(-split * 10).toFixed(1)}px) rotateZ(${(-split * 8).toFixed(2)}deg)`;
-          halves[1].style.transform = `translateX(${(split * w * .2).toFixed(1)}px) translateY(${(split * 10).toFixed(1)}px) rotateZ(${(split * 8).toFixed(2)}deg)`;
-          lbls.forEach(l => op(l, seg(p, .55, 1), `translateY(${(1 - seg(p, .55, 1)) * 16}px)`));
-          const k = eio(seg(p, .25, 1));
-          bar.style.transform = `scaleX(${k.toFixed(4)})`;
-          count.textContent = fmt(3000 * k);
-          scene.style.opacity = ent;
-        }
-      };
-    },
-
-    /* ===== 3 · Barras isométricas que crecen ===== */
-    bars(el) {
-      const iso = $('.iso', el);
-      const N = 7, bars = [];
-      for (let i = 0; i < N; i++) {
-        const c = document.createElement('div'); c.className = 'cube' + (i >= N - 2 ? ' is-hot' : '');
-        c.innerHTML = '<i class="f-top"></i><i class="f-a f-y0"></i><i class="f-a f-y1"></i><i class="f-b f-x0"></i><i class="f-b f-x1"></i>';
-        iso.appendChild(c);
-        bars.push({ el: c, f: $$('i', c) });
-      }
-      let S = 0;
-      const build = () => { S = iso.clientWidth; };
-      function cube(b, x, y, w, d, h) {
-        b.el.style.transform = `translate3d(${x}px,${y}px,0)`;
-        const [t, y0, y1, x0, x1] = b.f;
-        Object.assign(t.style, { width: `${w}px`, height: `${d}px`, transform: `translateZ(${h.toFixed(1)}px)` });
-        Object.assign(y0.style, { width: `${w}px`, height: `${h.toFixed(1)}px`, transform: 'rotateX(90deg)' });
-        Object.assign(y1.style, { width: `${w}px`, height: `${h.toFixed(1)}px`, transform: `translateY(${d}px) rotateX(90deg)` });
-        Object.assign(x0.style, { width: `${d}px`, height: `${h.toFixed(1)}px`, transform: 'rotateZ(90deg) rotateX(90deg)' });
-        Object.assign(x1.style, { width: `${d}px`, height: `${h.toFixed(1)}px`, transform: `translateX(${w}px) rotateZ(90deg) rotateX(90deg)` });
-      }
-      return {
-        live: true, build,
-        update(p, e) {
-          if (!S) build(); if (!S) return;
-          const w = S * .095, gap = S * .128, extra = eio(seg(p, .1, 1));
-          bars.forEach((b, i) => {
-            const grow = eo(seg(e, .25 + i * .06, .75 + i * .06));
-            let h = S * (.08 + i * .07) * grow;
-            if (i >= N - 2) h *= 1 + extra * (i === N - 1 ? .75 : .35) + (RM ? 0 : Math.sin(time * 1.4 + i) * .02 * extra);
-            cube(b, S * .06 + i * gap, S * .44, w, w, h);
-          });
-          iso.style.transform = `rotateX(${(58 - my * 4).toFixed(2)}deg) rotateZ(${(-42 + mx * 6).toFixed(2)}deg)`;
-        }
-      };
-    },
-
-    /* ===== 4 · Caja de importación que flota y gira ===== */
-    box(el) {
-      const obj = $('.box-obj', el), scene = $('.box-scene', el), ring = $('.ring-fg', el), count = $('.box-days .count', el), days = $('.box-days', el);
-      const faces = ['front', 'back', 'side', 'side', 'top', 'side'].map((n, i) => {
-        const f = document.createElement('i'); f.className = `f f--${n}${i === 1 ? ' f--back' : ''}`; if (i < 2) f.innerHTML = DROPI_LOGO; obj.appendChild(f); return f;
-      });
-      let ang = 20;
-      const build = () => {
-        const S = scene.clientWidth, w = S * .74, h = S * .56, d = S * .6;
-        const set = (f, W, H, tr) => Object.assign(f.style, { width: `${W}px`, height: `${H}px`, left: `${-W / 2}px`, top: `${-H / 2}px`, transform: tr });
-        set(faces[0], w, h, `translateZ(${d / 2}px)`);
-        set(faces[1], w, h, `rotateY(180deg) translateZ(${d / 2}px)`);
-        set(faces[2], d, h, `rotateY(90deg) translateZ(${w / 2}px)`);
-        set(faces[3], d, h, `rotateY(-90deg) translateZ(${w / 2}px)`);
-        set(faces[4], w, d, `rotateX(90deg) translateZ(${h / 2}px)`);
-        set(faces[5], w, d, `rotateX(-90deg) translateZ(${h / 2}px)`);
-      };
-      return {
-        live: true, build,
-        update(p, e, dt) {
-          if (!faces[0].style.width) build();
-          ang += (RM ? 0 : 16) * dt;
-          const ent = eo(e), fl = RM ? 0 : Math.sin(time * 1.3) * 8;
-          obj.style.transform = `translateY(${(fl - (1 - ent) * 60).toFixed(1)}px) rotateX(${(-24 + my * 6).toFixed(2)}deg) rotateY(${(ang + mx * 16).toFixed(2)}deg) scale(${lerp(.7, 1, ent).toFixed(3)})`;
-          scene.style.opacity = ent;
-          const k = eio(seg(p, .15, 1));
-          ring.style.strokeDashoffset = (553 * (1 - k)).toFixed(1);
-          count.textContent = Math.round(30 * k);
-          op(days, seg(e, .5, 1));
-        }
-      };
-    },
-
-    /* ===== 5 · 0 € en 3D sobre foto con parallax ===== */
-    zero(el) {
-      const num = $('.num3d', el), face = $('.num3d-face', el), cap = $('.zero-cap', el);
-      for (let i = 16; i >= 1; i--) {
-        const l = document.createElement('span'); l.className = 'layer'; l.style.setProperty('--i', i); l.textContent = face.textContent; l.setAttribute('aria-hidden', 'true');
-        l.style.padding = '.12em .06em .1em'; num.insertBefore(l, face);
-      }
-      return {
-        live: true,
-        update(p, e) {
-          const ent = eo(e);
-          num.style.transform = `translateY(${((1 - ent) * 40).toFixed(1)}px) rotateX(${(8 - my * 10).toFixed(2)}deg) rotateY(${(-14 + mx * 18 + (RM ? 0 : Math.sin(time * .5) * 6)).toFixed(2)}deg) scale(${lerp(.85, 1, ent).toFixed(3)})`;
-          num.style.opacity = ent;
-          op(cap, seg(e, .5, 1));
-        }
-      };
-    },
-
     /* ===== 6 · solo foto con parallax ===== */
     photo() { return { live: true, update() {} }; },
-
-    /* ===== 7 · Anillo de temas semanales ===== */
-    week(el) {
-      const ring = $('.week-ring', el), tiles = $$('.wk', el), n = tiles.length;
-      let R = 0, ang = 0, front = -1;
-      const build = () => {
-        const w = ring.clientWidth; R = (w / 2) / Math.tan(Math.PI / n) * 1.12;
-        tiles.forEach((t, i) => { t.style.transform = `rotateY(${(i * 360 / n).toFixed(2)}deg) translateZ(${R.toFixed(1)}px)`; });
-      };
-      return {
-        live: true, build,
-        update(p, e, dt) {
-          if (!R) build();
-          ang += (RM ? 0 : 12) * dt;
-          const a = ang + mx * 16, ent = eo(e);
-          ring.style.transform = `translateZ(${(-R * .4 - (1 - ent) * 300).toFixed(1)}px) rotateX(${(-10 + my * 5).toFixed(2)}deg) rotateY(${(-a).toFixed(2)}deg)`;
-          ring.style.opacity = ent;
-          let best = 0, bd = 1e9;
-          tiles.forEach((t, i) => {
-            const d = ((i * 360 / n - a) % 360 + 540) % 360 - 180;
-            if (Math.abs(d) < bd) { bd = Math.abs(d); best = i; }
-            t.style.opacity = (.12 + .88 * Math.pow((Math.cos(d * Math.PI / 180) + 1) / 2, 2)).toFixed(3);
-          });
-          if (best !== front) { if (front >= 0) tiles[front].classList.remove('is-front'); front = best; tiles[front].classList.add('is-front'); }
-        }
-      };
-    },
 
     /* ===== Dropi Pro · tiempos de entrega ===== */
     times(el) {
@@ -960,33 +876,6 @@
       });
       return {
         update(p, e) { rows.forEach((r, i) => $('.rb i', r).style.setProperty('--k', eio(seg(e, .4 + i * .04, .8 + i * .04)).toFixed(4))); }
-      };
-    },
-
-    /* ===== 9 · Go Verify: pedidos que se confirman en vivo ===== */
-    verify(el) {
-      const phone = $('.phone', el), list = $('.phone-list', el), num = $('.phone-count b', el), bar = $('.phone-bar i', el);
-      const bgCv = $('.ascii-bg', el), bg = bgCv ? AsciiWave(bgCv, { x: .7, y: .52 }) : null;
-      const cities = ['Madrid', 'Lisboa', 'Bucarest', 'Varsovia', 'Praga', 'Budapest', 'Zagreb', 'Liubliana', 'Bratislava', 'Atenas', 'Sofía', 'Sevilla', 'Oporto', 'Cracovia', 'Valencia'];
-      let n = 0, acc = 0, id = 4810;
-      function add() {
-        if (n >= 100) return;
-        const li = document.createElement('li');
-        li.innerHTML = `<span><b>Pedido ${++id}</b>${cities[id % cities.length]}</span><em>Confirmando</em>`;
-        list.prepend(li);
-        setTimeout(() => { li.classList.add('is-ok'); $('em', li).textContent = 'Confirmado'; n++; num.textContent = n; bar.style.transform = `scaleX(${n / 100})`; }, 700);
-        while (list.children.length > 7) list.lastElementChild.remove();
-      }
-      return {
-        live: true,
-        build() { if (bg) bg.build(); },
-        update(p, e, dt) {
-          const ent = eo(e);
-          if (bg) { bg.draw(time, ent); bgCv.style.opacity = 1; }
-          phone.style.transform = `translateY(${((1 - ent) * 60).toFixed(1)}px) rotateY(${(-18 + mx * 10).toFixed(2)}deg) rotateX(${(6 - my * 8).toFixed(2)}deg)`;
-          phone.style.opacity = ent;
-          if (e > .7) { acc += dt * (n < 12 ? 2.2 : 1.1); if (acc > 1) { acc = 0; add(); } }
-        }
       };
     }
   };
